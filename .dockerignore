@@ -1,0 +1,16 @@
+node_modules
+**/node_modules
+dist
+**/dist
+data
+.env
+.env.*
+!.env.example
+.git
+.npm-cache
+.tmp
+coverage
+test-results
+playwright-report
+dev-dist
+*.sqlite*

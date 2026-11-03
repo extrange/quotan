@@ -1,0 +1,32 @@
+name: quotan
+
+services:
+  quotan:
+    image: ghcr.io/extrange/quotan:latest
+    container_name: quotan
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 30s
+    env_file:
+      - .env
+    environment:
+      TZ: Asia/Singapore
+    volumes:
+      - ./data:/data
+    ports:
+      - "127.0.0.1:3000:3000"
+    networks:
+      - core
+    security_opt:
+      - no-new-privileges:true
+    labels:
+      traefik.enable: "true"
+      traefik.docker.network: core
+      traefik.http.routers.quotan.rule: Host(`quotes.example.com`)
+      traefik.http.routers.quotan.entrypoints: websecure
+      traefik.http.routers.quotan.tls.certresolver: letsencrypt
+      traefik.http.services.quotan.loadbalancer.server.port: "3000"
+
+networks:
+  core:
+    external: true

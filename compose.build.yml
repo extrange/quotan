@@ -1,0 +1,10 @@
+# Local development override: build the image from this checkout.
+#
+#   docker compose -f compose.yml -f compose.build.yml up --build
+services:
+  quotan:
+    image: quotan:local
+    pull_policy: build
+    build:
+      context: .
+      target: deployment

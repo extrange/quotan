@@ -1,0 +1,34 @@
+name: quotan-local
+
+services:
+  quotan:
+    image: quotan:local
+    container_name: quotan-local
+    init: true
+    build:
+      context: .
+      target: deployment
+    env_file:
+      - .env
+    environment:
+      DATABASE_PATH: /data/quotan.sqlite
+      PUBLIC_ORIGIN: http://localhost:3000
+      COOKIE_SECURE: "false"
+      TRUST_PROXY: "false"
+      TZ: Asia/Singapore
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./data:/data
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/api/healthz').then((r) => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3

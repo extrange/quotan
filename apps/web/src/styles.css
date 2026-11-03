@@ -1,0 +1,134 @@
+@import "@fontsource-variable/inter";
+@import "@fontsource-variable/lora";
+
+:root {
+	--quotan-quote-font: "Lora Variable", "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+	--quotan-header-height: 60px;
+	--quotan-bottom-nav-height: 68px;
+	color-scheme: light dark;
+}
+
+html,
+body,
+#root {
+	min-height: 100%;
+}
+
+body {
+	margin: 0;
+	background: var(--mantine-color-body);
+	-webkit-font-smoothing: antialiased;
+	text-rendering: optimizeLegibility;
+	overscroll-behavior-y: none;
+}
+
+.quote-text {
+	font-family: var(--quotan-quote-font);
+	font-size: clamp(1.05rem, 1rem + 0.5vw, 1.35rem);
+	line-height: 1.55;
+	letter-spacing: -0.01em;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
+
+.quote-text mark {
+	background: var(--mantine-color-yellow-3);
+	color: inherit;
+	border-radius: 2px;
+	padding: 0 1px;
+}
+
+[data-mantine-color-scheme="dark"] .quote-text mark {
+	background: var(--mantine-color-yellow-8);
+	color: var(--mantine-color-white);
+}
+
+.page-container {
+	width: 100%;
+	max-width: 920px;
+	margin: 0 auto;
+	padding: 16px 16px calc(var(--quotan-bottom-nav-height) + 24px);
+}
+
+@media (min-width: 62em) {
+	.page-container {
+		padding: 24px 24px 48px;
+	}
+}
+
+.safe-bottom {
+	padding-bottom: max(8px, env(safe-area-inset-bottom));
+}
+
+.quote-card {
+	transition:
+		transform 140ms ease,
+		border-color 140ms ease,
+		background-color 140ms ease;
+	border: 1px solid var(--mantine-color-default-border);
+	cursor: pointer;
+}
+
+.quote-card:hover {
+	border-color: var(--mantine-color-teal-5);
+	transform: translateY(-1px);
+}
+
+.quote-card:active {
+	transform: translateY(0);
+}
+
+.muted {
+	color: var(--mantine-color-dimmed);
+}
+
+.sticky-search {
+	position: sticky;
+	top: 0;
+	z-index: 20;
+	background: var(--mantine-color-body);
+	padding-top: 8px;
+	padding-bottom: 8px;
+}
+
+.duplicates-header {
+	position: sticky;
+	top: var(--quotan-header-height);
+	z-index: 20;
+	background: var(--mantine-color-body);
+	padding-top: 8px;
+	padding-bottom: 8px;
+}
+
+.quotes-toolbar {
+	position: sticky;
+	top: var(--quotan-header-height);
+	z-index: 30;
+	background: var(--mantine-color-body);
+	padding-bottom: 16px;
+	border-bottom: 1px solid var(--mantine-color-default-border);
+}
+
+.fade-in {
+	animation: fade-in 180ms ease both;
+}
+
+@keyframes fade-in {
+	from {
+		opacity: 0;
+		transform: translateY(3px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		animation-duration: 0.001ms;
+		transition-duration: 0.001ms;
+	}
+}

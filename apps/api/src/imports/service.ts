@@ -1,0 +1,171 @@
+import type {
+	ActiveQuoteStatus,
+	ImportCommitInput,
+	ImportReport,
+	ImportRowInput,
+	QuoteStatus,
+} from "@quotan/shared";
+import type { AppConfig } from "../config.js";
+import type { DatabaseHandle } from "../db/index.js";
+import { insertQuoteRaw } from "../db/quotes.js";
+import type { EmbeddingService } from "../embeddings/service.js";
+import { hashString, quoteKeys } from "../lib/normalize.js";
+import { nowIso } from "../lib/time.js";
+
+interface PreparedRow {
+	index: number;
+	text: string;
+	author: string;
+	status: ActiveQuoteStatus;
+	valid: boolean;
+	message?: string;
+	createdAt?: string;
+}
+
+function resolveStatus(input: ImportRowInput): ActiveQuoteStatus {
+	if (input.status) return input.status;
+	// Legacy alias: true → Starred, false → Inbox.
+	if (input.starred !== undefined) return input.starred ? "starred" : "inbox";
+	return "inbox";
+}
+
+function prepareRows(rows: ImportRowInput[]): PreparedRow[] {
+	return rows.map((input, index) => {
+		const text = input.text.trim();
+		const author = input.author?.trim() || "Unknown";
+		const valid = text.length > 0;
+		let message: string | undefined = valid ? undefined : "Quote text is required";
+		let createdAt: string | undefined;
+		if (input.createdAt) {
+			const date = new Date(input.createdAt);
+			if (Number.isNaN(date.getTime())) {
+				message = [message, "Invalid createdAt; using import time"].filter(Boolean).join("; ");
+			} else {
+				createdAt = date.toISOString();
+			}
+		}
+		return { index, text, author, status: resolveStatus(input), valid, message, createdAt };
+	});
+}
+
+interface ExistingQuote {
+	id: number;
+	status: QuoteStatus;
+}
+
+export class ImportService {
+	constructor(
+		private readonly handle: DatabaseHandle,
+		private readonly config: AppConfig,
+		private readonly embeddings: EmbeddingService,
+	) {}
+
+	commit(input: ImportCommitInput): ImportReport {
+		const existingReport = this.handle.sqlite
+			.prepare("SELECT stats_json FROM import_batches WHERE id = ?")
+			.get(input.batchId) as { stats_json: string } | undefined;
+		if (existingReport) return JSON.parse(existingReport.stats_json) as ImportReport;
+
+		if (input.rows.length > this.config.import.maxRows) {
+			throw new Error(`Too many rows; maximum is ${this.config.import.maxRows}`);
+		}
+		const prepared = prepareRows(input.rows);
+		const reportRows: ImportReport["rows"] = [];
+		const importedIds: number[] = [];
+		let imported = 0;
+		let invalid = 0;
+		let skippedDuplicates = 0;
+		let skippedDropped = 0;
+		const now = nowIso();
+
+		const findExisting = this.handle.sqlite.prepare(
+			`SELECT id, status FROM quotes
+			 WHERE dedupe_key = ?
+			 ORDER BY CASE WHEN status = 'dropped' THEN 1 ELSE 0 END, id
+			 LIMIT 1`,
+		);
+
+		const run = this.handle.sqlite.transaction(() => {
+			const seen = new Map<string, { id: number; status: QuoteStatus }>();
+			for (const row of prepared) {
+				if (!row.valid) {
+					invalid += 1;
+					reportRows.push({
+						index: row.index,
+						quoteId: null,
+						...(row.message ? { message: row.message } : {}),
+					});
+					continue;
+				}
+
+				const keys = quoteKeys(row.text, row.author);
+				const inBatch = seen.get(keys.dedupeKey);
+				const stored = findExisting.get(keys.dedupeKey) as ExistingQuote | undefined;
+				const duplicate = stored ?? inBatch;
+				if (duplicate) {
+					if (duplicate.status === "dropped") skippedDropped += 1;
+					else skippedDuplicates += 1;
+					reportRows.push({
+						index: row.index,
+						quoteId: null,
+						duplicateOfId: duplicate.id,
+						duplicateOfStatus: duplicate.status,
+						message:
+							duplicate.status === "dropped"
+								? "Skipped: an identical quote is archived in Dropped"
+								: "Skipped: an identical quote already exists",
+					});
+					continue;
+				}
+
+				const inserted = insertQuoteRaw(this.handle, {
+					text: row.text,
+					author: row.author,
+					status: row.status,
+					createdAt: row.createdAt,
+				});
+				seen.set(keys.dedupeKey, { id: inserted.id, status: row.status });
+				imported += 1;
+				importedIds.push(inserted.id);
+				reportRows.push({
+					index: row.index,
+					quoteId: inserted.id,
+					...(row.message ? { message: row.message } : {}),
+				});
+			}
+
+			const report: ImportReport = {
+				batchId: input.batchId,
+				imported,
+				invalid,
+				skippedDuplicates,
+				skippedDropped,
+				importedIds,
+				rows: reportRows,
+			};
+			this.handle.sqlite
+				.prepare("INSERT INTO import_batches(id, created_at, stats_json) VALUES(?, ?, ?)")
+				.run(input.batchId, now, JSON.stringify(report));
+			return report;
+		});
+
+		let report: ImportReport;
+		try {
+			report = run();
+		} catch (error) {
+			const existingBatch = this.handle.sqlite
+				.prepare("SELECT stats_json FROM import_batches WHERE id = ?")
+				.get(input.batchId) as { stats_json: string } | undefined;
+			if (existingBatch) return JSON.parse(existingBatch.stats_json) as ImportReport;
+			throw error;
+		}
+
+		if (report.imported > 0) this.embeddings.kick();
+		return report;
+	}
+}
+
+// Keep the hash import available for batch IDs generated by older clients.
+export function stableBatchId(seed: string): string {
+	return hashString(seed).slice(0, 32);
+}

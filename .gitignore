@@ -1,0 +1,25 @@
+node_modules/
+dist/
+build/
+data/
+.env
+.env.*
+!.env.example
+.npm-cache/
+coverage/
+test-results/
+playwright-report/
+dev-dist/
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+*.sqlite.backup-*
+.DS_Store
+
+.pre-commit-config.yaml
+.devenv/
+.tmp/
+.docker/
+
+# Local quote import/export samples
+/life_observations.json
