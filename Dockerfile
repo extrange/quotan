@@ -1,4 +1,4 @@
-FROM node:24-bookworm-slim AS base
+FROM node:26-bookworm-slim AS base
 
 WORKDIR /app
 
@@ -44,7 +44,7 @@ RUN npm run build \
 
 # -------------------------
 
-FROM node:24-bookworm-slim AS deployment
+FROM node:26-bookworm-slim AS deployment
 
 ENV NODE_ENV=production \
     HOST=0.0.0.0 \
